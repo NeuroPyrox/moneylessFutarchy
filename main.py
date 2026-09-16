@@ -155,21 +155,24 @@ class PredictionStore:
     def readAllPredictions(self):
         rows = self.connection.execute(
             """
-            SELECT market, forecaster, option, percentile5, percentile95
+            SELECT market, forecaster, option, percentile5, percentile95, date
             FROM predictions
-            ORDER BY rowid
+            ORDER BY forecaster, market, option
             """
         ).fetchall()
-        return [
-            {
+        predictions = []
+        for row in rows:
+            prediction = {
                 "market": row[0],
                 "forecaster": row[1],
                 "option": row[2],
                 "percentile5": row[3],
                 "percentile95": row[4],
             }
-            for row in rows
-        ]
+            if row[5] is not None:
+                prediction["date"] = row[5]
+            predictions.append(prediction)
+        return predictions
 
     def resolveMarket(self, market, outcome):
         self.connection.execute(
