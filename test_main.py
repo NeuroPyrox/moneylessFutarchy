@@ -40,13 +40,98 @@ User stories above here have been implemented, and user stories below here haven
 """
 
 import unittest
+import subprocess
+import sys
 from tempfile import TemporaryDirectory
+from pathlib import Path
 
 from main import (
     InvalidPrediction,
     MarketAlreadyResolved,
     PredictionStore,
 )
+
+
+class ImportPredictionsCommandTests(unittest.TestCase):
+    def test_importPredictions_readsTableFromStdin(self):
+        copiedTable = (
+            "Market\tForecaster\tOption\tPercentile5\tPercentile95\tDate\n"
+            "market-1\tforecaster-1\toption-a\t10\t30\t9/11/26\n"
+        )
+        with TemporaryDirectory() as directory:
+            filename = f"{directory}/predictions.db"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).with_name("import_predictions.py")),
+                    filename,
+                ],
+                input=copiedTable,
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            store = PredictionStore(filename)
+            self.assertEqual(
+                store.readPrediction("market-1", "forecaster-1", "option-a"),
+                {
+                    "percentile5": 10.0,
+                    "percentile95": 30.0,
+                    "date": "9/11/26",
+                },
+            )
+            store.close()
+
+    def test_importPredictions_rejectsMalformedTable(self):
+        with TemporaryDirectory() as directory:
+            filename = f"{directory}/predictions.db"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).with_name("import_predictions.py")),
+                    filename,
+                ],
+                input="not a prediction table\n",
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+
+
+class ViewPredictionsCommandTests(unittest.TestCase):
+    def test_viewPredictions_printsSortedTable(self):
+        with TemporaryDirectory() as directory:
+            filename = f"{directory}/predictions.db"
+            store = PredictionStore(filename)
+            store.submitPrediction(
+                "market-z", "Olivia", "option-a", 3, 15, date="9/11/26"
+            )
+            store.submitPrediction(
+                "market-b", "Danny", "option-a", 10, 35, date="9/11/26"
+            )
+            store.close()
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(Path(__file__).with_name("view_predictions.py")),
+                    filename,
+                ],
+                text=True,
+                capture_output=True,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                result.stdout,
+                (
+                    "Forecaster\tMarket\tOption\tPercentile5\tPercentile95\tDate\n"
+                    "Danny\tmarket-b\toption-a\t10.0\t35.0\t9/11/26\n"
+                    "Olivia\tmarket-z\toption-a\t3.0\t15.0\t9/11/26\n"
+                ),
+            )
 
 
 class SubmitPredictionTests(unittest.TestCase):
@@ -259,10 +344,12 @@ class PredictionPersistenceTests(unittest.TestCase):
             filename = f"{directory}/predictions.db"
             firstStore = PredictionStore(filename)
             firstStore.submitPrediction(
-                "market-1", "forecaster-1", "option-a", 10, 30
+                "market-1", "forecaster-1", "option-a", 10, 30,
+                date="9/11/26",
             )
             firstStore.submitPrediction(
-                "market-1", "forecaster-2", "option-b", 20, 40
+                "market-1", "forecaster-2", "option-b", 20, 40,
+                date="9/11/26",
             )
             firstStore.close()
 
@@ -277,6 +364,7 @@ class PredictionPersistenceTests(unittest.TestCase):
                         "option": "option-a",
                         "percentile5": 10,
                         "percentile95": 30,
+                        "date": "9/11/26",
                     },
                     {
                         "market": "market-1",
@@ -284,6 +372,7 @@ class PredictionPersistenceTests(unittest.TestCase):
                         "option": "option-b",
                         "percentile5": 20,
                         "percentile95": 40,
+                        "date": "9/11/26",
                     },
                 ],
             )
