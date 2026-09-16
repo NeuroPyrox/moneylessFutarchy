@@ -1,6 +1,8 @@
 
+import csv
 import math
 import sqlite3
+from io import StringIO
 
 
 class InvalidPrediction(ValueError):
@@ -75,6 +77,58 @@ class PredictionStore:
                 date=excluded.date
             """,
             (market, forecaster, option, percentile5, percentile95, date),
+        )
+        self.connection.commit()
+
+    def submitPredictions(self, copiedTable):
+        rows = csv.reader(StringIO(copiedTable), delimiter="\t")
+        header = next(rows, None)
+        expectedHeader = [
+            "Market",
+            "Forecaster",
+            "Option",
+            "Percentile5",
+            "Percentile95",
+            "Date",
+        ]
+        if header != expectedHeader:
+            raise ValueError("table must have the expected prediction columns")
+
+        predictions = []
+        for row in rows:
+            if not row or not any(row):
+                continue
+            if len(row) != len(expectedHeader):
+                raise ValueError("each prediction row must have six columns")
+            percentile5 = float(row[3])
+            percentile95 = float(row[4])
+            if self._isMarketResolved(row[0]):
+                raise MarketAlreadyResolved(
+                    f"market {row[0]!r} is already resolved"
+                )
+            _validatePrediction(row[2], percentile5, percentile95)
+            predictions.append(
+                (
+                    row[0],
+                    row[1],
+                    row[2],
+                    percentile5,
+                    percentile95,
+                    row[5],
+                )
+            )
+
+        self.connection.executemany(
+            """
+            INSERT INTO predictions
+                (market, forecaster, option, percentile5, percentile95, date)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(market, forecaster, option) DO UPDATE SET
+                percentile5=excluded.percentile5,
+                percentile95=excluded.percentile95,
+                date=excluded.date
+            """,
+            predictions,
         )
         self.connection.commit()
 

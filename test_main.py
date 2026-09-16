@@ -11,6 +11,7 @@
         - As a forecaster, I want the submitted date saved with the prediction.
         - As a forecaster, I want the saved date loaded when the program starts.
         - As a forecaster, I want the date associated with the correct market, option, and forecaster.
+    - I want to submit in bulk from a copied Google sheets table
 
 User stories above here have been implemented, and user stories below here haven’t been implemented yet.
 
@@ -19,7 +20,6 @@ User stories above here have been implemented, and user stories below here haven
         - As an administrator, I want dates stored in a consistent timezone and format.
         - As an administrator, I want historical dates preserved exactly when prediction values are revised.
         - Using another method, automatically record the current submission time instead of accepting a caller-provided date.
-    - I want to submit in bulk from a copied Google sheets table
 - I want to read the recommended decision of the market
     - As a decision-maker, I want to see the market's recommended option.
     - As a decision-maker, I want to see a probability distribution over the available options.
@@ -50,6 +50,35 @@ from main import (
 
 
 class SubmitPredictionTests(unittest.TestCase):
+    def test_submitPredictions_acceptsCopiedGoogleSheetsTable(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            copiedTable = (
+                "Market\tForecaster\tOption\tPercentile5\tPercentile95\tDate\n"
+                "market-1\tforecaster-1\toption-a\t10\t30\t9/11/26\n"
+                "market-1\tforecaster-2\toption-b\t20\t40\t9/11/26\n"
+            )
+
+            store.submitPredictions(copiedTable)
+
+            self.assertEqual(
+                store.readPrediction("market-1", "forecaster-1", "option-a"),
+                {
+                    "percentile5": 10.0,
+                    "percentile95": 30.0,
+                    "date": "9/11/26",
+                },
+            )
+            self.assertEqual(
+                store.readPrediction("market-1", "forecaster-2", "option-b"),
+                {
+                    "percentile5": 20.0,
+                    "percentile95": 40.0,
+                    "date": "9/11/26",
+                },
+            )
+            store.close()
+
     def test_submit_prediction_stores_one_options_score_distribution(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
