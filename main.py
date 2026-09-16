@@ -33,6 +33,10 @@ def _validatePrediction(option, percentile5, percentile95):
         )
 
 
+def _today():
+    return calendarDate.today()
+
+
 def _validateDate(date):
     if not isinstance(date, str) or not date:
         raise InvalidPrediction("date must use YYYY-MM-DD format")
@@ -44,6 +48,8 @@ def _validateDate(date):
         ) from error
     if parsedDate.isoformat() != date:
         raise InvalidPrediction("date must use YYYY-MM-DD format")
+    if parsedDate > _today():
+        raise InvalidPrediction("date cannot be later than today")
 
 
 class PredictionStore:
