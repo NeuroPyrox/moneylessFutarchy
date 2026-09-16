@@ -8,18 +8,18 @@
         - As a forecaster, I want predictions from different markets, options, and forecasters kept separate.
     - I want to submit a date with my predictions
         - As a forecaster, I want to submit a date with a prediction.
+        - As a forecaster, I want the submitted date saved with the prediction.
 
 User stories above here have been implemented, and user stories below here haven’t been implemented yet.
 
-- As a forecaster, I want the submitted date saved with the prediction.
-- As a forecaster, I want the saved date loaded when the program starts.
-- As a forecaster, I want the date associated with the correct market, option, and forecaster.
-- As a forecaster, I want to revise the date when revising a prediction.
-- As an administrator, I want invalid dates rejected with a clear error.
-- As an administrator, I want dates stored in a consistent timezone and format.
-- As an administrator, I want historical dates preserved exactly when prediction values are revised.
-- Using another method, automatically record the current submission time instead of accepting a caller-provided date.
-- I want to submit in bulk from a copied Google sheets table
+        - As a forecaster, I want the saved date loaded when the program starts.
+        - As a forecaster, I want the date associated with the correct market, option, and forecaster.
+        - As a forecaster, I want to revise the date when revising a prediction.
+        - As an administrator, I want invalid dates rejected with a clear error.
+        - As an administrator, I want dates stored in a consistent timezone and format.
+        - As an administrator, I want historical dates preserved exactly when prediction values are revised.
+        - Using another method, automatically record the current submission time instead of accepting a caller-provided date.
+    - I want to submit in bulk from a copied Google sheets table
 - I want to read the recommended decision of the market
     - As a decision-maker, I want to see the market's recommended option.
     - As a decision-maker, I want to see a probability distribution over the available options.
@@ -187,7 +187,8 @@ class PredictionPersistenceTests(unittest.TestCase):
             filename = f"{directory}/predictions.db"
             firstStore = PredictionStore(filename)
             firstStore.submitPrediction(
-                "market-1", "forecaster-1", "option-a", 10, 30
+                "market-1", "forecaster-1", "option-a", 10, 30,
+                date="2030-01-15",
             )
             firstStore.close()
 
@@ -197,7 +198,11 @@ class PredictionPersistenceTests(unittest.TestCase):
                 startedStore.readPrediction(
                     "market-1", "forecaster-1", "option-a"
                 ),
-                {"percentile5": 10, "percentile95": 30},
+                {
+                    "percentile5": 10,
+                    "percentile95": 30,
+                    "date": "2030-01-15",
+                },
             )
             startedStore.close()
 
