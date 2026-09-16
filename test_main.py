@@ -230,6 +230,82 @@ class SubmitPredictionTests(unittest.TestCase):
 
 
 class SubmitPredictionRevisionTests(unittest.TestCase):
+    def test_submitPrediction_revisionReplacesPreviousDate(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            store.submitPrediction(
+                "market-date", "forecaster-1", "option-a", 10, 30,
+                date="2030-01-15",
+            )
+            store.submitPrediction(
+                "market-date", "forecaster-1", "option-a", 20, 40,
+                date="2030-02-15",
+            )
+
+            self.assertEqual(
+                store.readPrediction("market-date", "forecaster-1", "option-a"),
+                {
+                    "percentile5": 20.0,
+                    "percentile95": 40.0,
+                    "date": "2030-02-15",
+                },
+            )
+            store.close()
+
+    def test_submitPrediction_revisionPreservesOtherPredictionDates(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            store.submitPrediction(
+                "market-date", "forecaster-1", "option-a", 10, 30,
+                date="2030-01-15",
+            )
+            store.submitPrediction(
+                "market-date", "forecaster-1", "option-b", 50, 70,
+                date="2030-03-15",
+            )
+            store.submitPrediction(
+                "market-date", "forecaster-1", "option-a", 20, 40,
+                date="2030-02-15",
+            )
+
+            self.assertEqual(
+                store.readPrediction("market-date", "forecaster-1", "option-b"),
+                {
+                    "percentile5": 50.0,
+                    "percentile95": 70.0,
+                    "date": "2030-03-15",
+                },
+            )
+            store.close()
+
+    def test_submitPrediction_revisedDatePersistsAfterRestart(self):
+        with TemporaryDirectory() as directory:
+            filename = f"{directory}/predictions.db"
+            store = PredictionStore(filename)
+            store.submitPrediction(
+                "market-date", "forecaster-1", "option-a", 10, 30,
+                date="2030-01-15",
+            )
+            store.submitPrediction(
+                "market-date", "forecaster-1", "option-a", 20, 40,
+                date="2030-02-15",
+            )
+            store.close()
+
+            restartedStore = PredictionStore(filename)
+
+            self.assertEqual(
+                restartedStore.readPrediction(
+                    "market-date", "forecaster-1", "option-a"
+                ),
+                {
+                    "percentile5": 20.0,
+                    "percentile95": 40.0,
+                    "date": "2030-02-15",
+                },
+            )
+            restartedStore.close()
+
     def test_submitPrediction_beforeMarketResolves_replacesPreviousPrediction(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
