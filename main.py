@@ -32,6 +32,11 @@ def _validatePrediction(option, percentile5, percentile95):
         )
 
 
+def _validateDate(date):
+    if not isinstance(date, str) or not date:
+        raise InvalidPrediction("date must be a non-empty string")
+
+
 class PredictionStore:
     def __init__(self, filename):
         self.connection = sqlite3.connect(filename)
@@ -66,6 +71,7 @@ class PredictionStore:
                 f"market {market!r} is already resolved"
             )
         _validatePrediction(option, percentile5, percentile95)
+        _validateDate(date)
         self.connection.execute(
             """
             INSERT INTO predictions
@@ -107,6 +113,7 @@ class PredictionStore:
                     f"market {row[0]!r} is already resolved"
                 )
             _validatePrediction(row[2], percentile5, percentile95)
+            _validateDate(row[5])
             predictions.append(
                 (
                     row[0],
