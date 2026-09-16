@@ -1,3 +1,44 @@
+"""
+- I want to submit a prediction
+    - As a forecaster, I want to submit a probability distribution for a prediction using a 5th and 95th percentile.
+    - As a forecaster, I want to revise my prediction before the market resolves.
+    - As a forecaster, I want the system to reject invalid predictions.
+    - I want the predictions to persist between program runs.
+        - As a forecaster, I want a submitted prediction saved to durable storage so it survives program shutdown.
+        - As a forecaster, I want predictions from different markets, options, and forecasters kept separate.
+    - I want to submit a date with my predictions
+        - As a forecaster, I want to submit a date with a prediction.
+
+User stories above here have been implemented, and user stories below here haven’t been implemented yet.
+
+- As a forecaster, I want the submitted date saved with the prediction.
+- As a forecaster, I want the saved date loaded when the program starts.
+- As a forecaster, I want the date associated with the correct market, option, and forecaster.
+- As a forecaster, I want to revise the date when revising a prediction.
+- As an administrator, I want invalid dates rejected with a clear error.
+- As an administrator, I want dates stored in a consistent timezone and format.
+- As an administrator, I want historical dates preserved exactly when prediction values are revised.
+- Using another method, automatically record the current submission time instead of accepting a caller-provided date.
+- I want to submit in bulk from a copied Google sheets table
+- I want to read the recommended decision of the market
+    - As a decision-maker, I want to see the market's recommended option.
+    - As a decision-maker, I want to see a probability distribution over the available options.
+- I want to resolve a prediction market
+    - As a market administrator, I want to resolve a prediction market so that submitted predictions can be scored.
+    - As a market administrator, I want to resolve a market using a single numerical outcome.
+    - As a market administrator, I want to resolve a market using the outcome of another prediction market.
+    - As a market administrator, I want the system to prevent a market from being resolved more than once.
+    - As a participant, I want to see the resolved outcome of a market.
+    - As a participant, I want my prediction to receive a score after the market resolves.
+- The futarchy must be moneyless
+    - As a participant, I want to submit predictions without using real money.
+    - As a participant, I want my ability to influence the market to depend on my prediction performance rather than my financial wealth.
+    - As an administrator, I want the market to operate without deposits, withdrawals, or monetary payments.
+- Future wishlist
+    - As an administrator, I want persistence failures reported rather than silently losing predictions.
+    - As an administrator, I want existing saved prediction data preserved when the program is upgraded.
+"""
+
 import unittest
 from tempfile import TemporaryDirectory
 
