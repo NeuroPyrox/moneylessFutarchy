@@ -9,11 +9,11 @@
     - I want to submit a date with my predictions
         - As a forecaster, I want to submit a date with a prediction.
         - As a forecaster, I want the submitted date saved with the prediction.
+        - As a forecaster, I want the saved date loaded when the program starts.
+        - As a forecaster, I want the date associated with the correct market, option, and forecaster.
 
 User stories above here have been implemented, and user stories below here haven’t been implemented yet.
 
-        - As a forecaster, I want the saved date loaded when the program starts.
-        - As a forecaster, I want the date associated with the correct market, option, and forecaster.
         - As a forecaster, I want to revise the date when revising a prediction.
         - As an administrator, I want invalid dates rejected with a clear error.
         - As an administrator, I want dates stored in a consistent timezone and format.
@@ -292,6 +292,32 @@ class PredictionPersistenceTests(unittest.TestCase):
 
 
 class PredictionSeparationTests(unittest.TestCase):
+    def test_predictionDate_isAssociatedWithCorrectIdentifiers(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            store.submitPrediction(
+                "market-a", "forecaster-1", "option-a", 10, 30,
+                date="2030-01-15",
+            )
+            store.submitPrediction(
+                "market-b", "forecaster-2", "option-b", 20, 40,
+                date="2030-02-15",
+            )
+
+            self.assertEqual(
+                store.readPrediction(
+                    "market-a", "forecaster-1", "option-a"
+                )["date"],
+                "2030-01-15",
+            )
+            self.assertEqual(
+                store.readPrediction(
+                    "market-b", "forecaster-2", "option-b"
+                )["date"],
+                "2030-02-15",
+            )
+            store.close()
+
     def test_predictionsFromDifferentMarkets_areKeptSeparate(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
