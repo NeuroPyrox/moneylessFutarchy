@@ -51,7 +51,6 @@ from main import (
     PredictionStore,
 )
 
-
 class ImportPredictionsCommandTests(unittest.TestCase):
     def test_importPredictions_readsTableFromStdin(self):
         copiedTable = (
@@ -135,6 +134,35 @@ class ViewPredictionsCommandTests(unittest.TestCase):
 
 
 class SubmitPredictionTests(unittest.TestCase):
+    def test_submitPrediction_requiresDate(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+
+            with self.assertRaises(InvalidPrediction):
+                store.submitPrediction(
+                    "market-1", "forecaster-1", "option-a", 10, 30
+                )
+
+            store.close()
+
+    def test_submitPredictions_requiresDateForEveryRow(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            copiedTable = (
+                "Market\tForecaster\tOption\tPercentile5\tPercentile95\tDate\n"
+                "market-1\tforecaster-1\toption-a\t10\t30\t\n"
+            )
+
+            with self.assertRaises(InvalidPrediction):
+                store.submitPredictions(copiedTable)
+
+            self.assertIsNone(
+                store.readPrediction(
+                    "market-1", "forecaster-1", "option-a"
+                )
+            )
+            store.close()
+
     def test_submitPredictions_acceptsCopiedGoogleSheetsTable(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
@@ -173,6 +201,7 @@ class SubmitPredictionTests(unittest.TestCase):
                 option="option-a",
                 percentile5=10,
                 percentile95=30,
+                date="test-date",
             ))
             store.close()
 
@@ -204,36 +233,36 @@ class SubmitPredictionRevisionTests(unittest.TestCase):
     def test_submitPrediction_beforeMarketResolves_replacesPreviousPrediction(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
-            store.submitPrediction("market-replace", "forecaster-1", "option-a", 10, 30)
-            store.submitPrediction("market-replace", "forecaster-1", "option-a", 20, 40)
+            store.submitPrediction("market-replace", "forecaster-1", "option-a", 10, 30, date="test-date")
+            store.submitPrediction("market-replace", "forecaster-1", "option-a", 20, 40, date="test-date")
             store.close()
 
     def test_submitPrediction_beforeMarketResolves_keepsOnePrediction(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
-            store.submitPrediction("market-one", "forecaster-1", "option-a", 10, 30)
-            store.submitPrediction("market-one", "forecaster-1", "option-a", 20, 40)
+            store.submitPrediction("market-one", "forecaster-1", "option-a", 10, 30, date="test-date")
+            store.submitPrediction("market-one", "forecaster-1", "option-a", 20, 40, date="test-date")
             self.assertEqual(store.readPrediction("market-one", "forecaster-1", "option-a"),
-                             {"percentile5": 20, "percentile95": 40})
+                             {"percentile5": 20, "percentile95": 40, "date": "test-date"})
             store.close()
 
     def test_submitPrediction_doesNotChangeOtherPredictions(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
-            store.submitPrediction("market-isolated", "forecaster-1", "option-a", 10, 30)
-            store.submitPrediction("market-isolated", "forecaster-1", "option-b", 50, 70)
-            store.submitPrediction("market-isolated", "forecaster-1", "option-a", 20, 40)
+            store.submitPrediction("market-isolated", "forecaster-1", "option-a", 10, 30, date="test-date")
+            store.submitPrediction("market-isolated", "forecaster-1", "option-b", 50, 70, date="test-date")
+            store.submitPrediction("market-isolated", "forecaster-1", "option-a", 20, 40, date="test-date")
             self.assertEqual(store.readPrediction("market-isolated", "forecaster-1", "option-b"),
-                             {"percentile5": 50, "percentile95": 70})
+                             {"percentile5": 50, "percentile95": 70, "date": "test-date"})
             store.close()
 
     def test_submitPrediction_afterMarketResolves_isRejected(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
-            store.submitPrediction("market-resolved", "forecaster-1", "option-a", 10, 30)
+            store.submitPrediction("market-resolved", "forecaster-1", "option-a", 10, 30, date="test-date")
             store.resolveMarket("market-resolved", 20)
             with self.assertRaises(MarketAlreadyResolved):
-                store.submitPrediction("market-resolved", "forecaster-1", "option-a", 20, 40)
+                store.submitPrediction("market-resolved", "forecaster-1", "option-a", 20, 40, date="test-date")
             store.close()
 
 
@@ -242,22 +271,22 @@ class InvalidPredictionTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
             with self.assertRaises(InvalidPrediction):
-                store.submitPrediction("market-invalid-order", "forecaster-1", "option-a", 40, 20)
+                store.submitPrediction("market-invalid-order", "forecaster-1", "option-a", 40, 20, date="test-date")
             store.close()
 
     def test_submitPrediction_acceptsEqualPercentiles(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
-            store.submitPrediction("market-equal", "forecaster-1", "option-a", 25, 25)
+            store.submitPrediction("market-equal", "forecaster-1", "option-a", 25, 25, date="test-date")
             self.assertEqual(store.readPrediction("market-equal", "forecaster-1", "option-a"),
-                             {"percentile5": 25, "percentile95": 25})
+                             {"percentile5": 25, "percentile95": 25, "date": "test-date"})
             store.close()
 
     def test_submitPrediction_rejectsNonNumericPercentiles(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
             with self.assertRaises(InvalidPrediction):
-                store.submitPrediction("market-invalid-type", "forecaster-1", "option-a", "low", 30)
+                store.submitPrediction("market-invalid-type", "forecaster-1", "option-a", "low", 30, date="test-date")
             store.close()
 
     def test_submitPrediction_rejectsNonFinitePercentiles(self):
@@ -267,6 +296,7 @@ class InvalidPredictionTests(unittest.TestCase):
                 store.submitPrediction(
                 "market-invalid-finite", "forecaster-1", "option-a",
                 float("nan"), 30,
+                date="test-date",
                 )
             store.close()
 
@@ -274,24 +304,24 @@ class InvalidPredictionTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
             with self.assertRaises(InvalidPrediction):
-                store.submitPrediction("market-invalid-bool", "forecaster-1", "option-a", True, 30)
+                store.submitPrediction("market-invalid-bool", "forecaster-1", "option-a", True, 30, date="test-date")
             store.close()
 
     def test_submitPrediction_rejectsMissingOption(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
             with self.assertRaises(InvalidPrediction):
-                store.submitPrediction("market-missing-option", "forecaster-1", "", 10, 30)
+                store.submitPrediction("market-missing-option", "forecaster-1", "", 10, 30, date="test-date")
             store.close()
 
     def test_submitPrediction_invalidRevision_preservesPreviousPrediction(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
-            store.submitPrediction("market-preserved", "forecaster-1", "option-a", 10, 30)
+            store.submitPrediction("market-preserved", "forecaster-1", "option-a", 10, 30, date="test-date")
             with self.assertRaises(InvalidPrediction):
-                store.submitPrediction("market-preserved", "forecaster-1", "option-a", 40, 20)
+                store.submitPrediction("market-preserved", "forecaster-1", "option-a", 40, 20, date="test-date")
             self.assertEqual(store.readPrediction("market-preserved", "forecaster-1", "option-a"),
-                             {"percentile5": 10, "percentile95": 30})
+                             {"percentile5": 10, "percentile95": 30, "date": "test-date"})
             store.close()
 
 
@@ -326,7 +356,7 @@ class PredictionPersistenceTests(unittest.TestCase):
             store = PredictionStore(filename)
             store.submitPrediction(
                 "market-1", "forecaster-1", "option-a", 10, 30
-            )
+            , date="test-date")
             store.close()
 
             reopenedStore = PredictionStore(filename)
@@ -335,7 +365,7 @@ class PredictionPersistenceTests(unittest.TestCase):
                 reopenedStore.readPrediction(
                     "market-1", "forecaster-1", "option-a"
                 ),
-                {"percentile5": 10, "percentile95": 30},
+                {"percentile5": 10, "percentile95": 30, "date": "test-date"},
             )
             reopenedStore.close()
 
@@ -364,6 +394,7 @@ class PredictionPersistenceTests(unittest.TestCase):
                         "option": "option-a",
                         "percentile5": 10,
                         "percentile95": 30,
+                        "date": "test-date",
                         "date": "9/11/26",
                     },
                     {
@@ -372,6 +403,7 @@ class PredictionPersistenceTests(unittest.TestCase):
                         "option": "option-b",
                         "percentile5": 20,
                         "percentile95": 40,
+                        "date": "test-date",
                         "date": "9/11/26",
                     },
                 ],
@@ -392,10 +424,10 @@ class PredictionPersistenceTests(unittest.TestCase):
             store = PredictionStore(filename)
             store.submitPrediction(
                 "market-1", "forecaster-1", "option-a", 10, 30
-            )
+            , date="test-date")
             store.submitPrediction(
                 "market-1", "forecaster-1", "option-a", 20, 40
-            )
+            , date="test-date")
             store.close()
 
             restartedStore = PredictionStore(filename)
@@ -404,7 +436,7 @@ class PredictionPersistenceTests(unittest.TestCase):
                 restartedStore.readPrediction(
                     "market-1", "forecaster-1", "option-a"
                 ),
-                {"percentile5": 20, "percentile95": 40},
+                {"percentile5": 20, "percentile95": 40, "date": "test-date"},
             )
             restartedStore.close()
 
@@ -441,16 +473,16 @@ class PredictionSeparationTests(unittest.TestCase):
             store = PredictionStore(f"{directory}/predictions.db")
             store.submitPrediction(
                 "market-a", "forecaster-1", "option-a", 10, 30
-            )
+            , date="test-date")
             store.submitPrediction(
                 "market-b", "forecaster-1", "option-a", 20, 40
-            )
+            , date="test-date")
 
             self.assertEqual(
                 store.readPrediction(
                     "market-a", "forecaster-1", "option-a"
                 ),
-                {"percentile5": 10, "percentile95": 30},
+                {"percentile5": 10, "percentile95": 30, "date": "test-date"},
             )
             store.close()
 
@@ -459,16 +491,16 @@ class PredictionSeparationTests(unittest.TestCase):
             store = PredictionStore(f"{directory}/predictions.db")
             store.submitPrediction(
                 "market-1", "forecaster-1", "option-a", 10, 30
-            )
+            , date="test-date")
             store.submitPrediction(
                 "market-1", "forecaster-1", "option-b", 20, 40
-            )
+            , date="test-date")
 
             self.assertEqual(
                 store.readPrediction(
                     "market-1", "forecaster-1", "option-a"
                 ),
-                {"percentile5": 10, "percentile95": 30},
+                {"percentile5": 10, "percentile95": 30, "date": "test-date"},
             )
             store.close()
 
@@ -477,16 +509,16 @@ class PredictionSeparationTests(unittest.TestCase):
             store = PredictionStore(f"{directory}/predictions.db")
             store.submitPrediction(
                 "market-1", "forecaster-1", "option-a", 10, 30
-            )
+            , date="test-date")
             store.submitPrediction(
                 "market-1", "forecaster-2", "option-a", 20, 40
-            )
+            , date="test-date")
 
             self.assertEqual(
                 store.readPrediction(
                     "market-1", "forecaster-1", "option-a"
                 ),
-                {"percentile5": 10, "percentile95": 30},
+                {"percentile5": 10, "percentile95": 30, "date": "test-date"},
             )
             store.close()
 
@@ -495,10 +527,10 @@ class PredictionSeparationTests(unittest.TestCase):
             store = PredictionStore(f"{directory}/predictions.db")
             store.submitPrediction(
                 "market-a", "forecaster-1", "option-a", 10, 30
-            )
+            , date="test-date")
             store.submitPrediction(
                 "market-b", "forecaster-2", "option-b", 20, 40
-            )
+            , date="test-date")
 
             self.assertEqual(
                 store.readAllPredictions(),
@@ -509,6 +541,7 @@ class PredictionSeparationTests(unittest.TestCase):
                         "option": "option-a",
                         "percentile5": 10,
                         "percentile95": 30,
+                        "date": "test-date",
                     },
                     {
                         "market": "market-b",
@@ -516,6 +549,7 @@ class PredictionSeparationTests(unittest.TestCase):
                         "option": "option-b",
                         "percentile5": 20,
                         "percentile95": 40,
+                        "date": "test-date",
                     },
                 ],
             )
@@ -529,7 +563,7 @@ class PredictionSeparationTests(unittest.TestCase):
             with self.assertRaises(InvalidPrediction):
                 store.submitPrediction(
                     "market-1", "forecaster-1", "option-a", 40, 20
-                )
+                , date="test-date")
 
             store.close()
             reopenedStore = PredictionStore(filename)
@@ -547,7 +581,7 @@ class PredictionSeparationTests(unittest.TestCase):
             firstStore = PredictionStore(filename)
             firstStore.submitPrediction(
                 "market-1", "forecaster-1", "option-a", 10, 30
-            )
+            , date="test-date")
             firstStore.close()
 
             secondStore = PredictionStore(filename)
@@ -556,7 +590,7 @@ class PredictionSeparationTests(unittest.TestCase):
                 secondStore.readPrediction(
                     "market-1", "forecaster-1", "option-a"
                 ),
-                {"percentile5": 10, "percentile95": 30},
+                {"percentile5": 10, "percentile95": 30, "date": "test-date"},
             )
             secondStore.close()
 
