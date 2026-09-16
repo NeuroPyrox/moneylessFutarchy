@@ -41,6 +41,7 @@ class PredictionStore:
                 option TEXT NOT NULL,
                 percentile5 REAL NOT NULL,
                 percentile95 REAL NOT NULL,
+                date TEXT,
                 PRIMARY KEY (market, forecaster, option)
             )
             """
@@ -56,7 +57,7 @@ class PredictionStore:
         self.connection.commit()
 
     def submitPrediction(
-        self, market, forecaster, option, percentile5, percentile95
+        self, market, forecaster, option, percentile5, percentile95, date=None
     ):
         if self._isMarketResolved(market):
             raise MarketAlreadyResolved(
@@ -66,13 +67,14 @@ class PredictionStore:
         self.connection.execute(
             """
             INSERT INTO predictions
-                (market, forecaster, option, percentile5, percentile95)
-            VALUES (?, ?, ?, ?, ?)
+                (market, forecaster, option, percentile5, percentile95, date)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(market, forecaster, option) DO UPDATE SET
                 percentile5=excluded.percentile5,
-                percentile95=excluded.percentile95
+                percentile95=excluded.percentile95,
+                date=excluded.date
             """,
-            (market, forecaster, option, percentile5, percentile95),
+            (market, forecaster, option, percentile5, percentile95, date),
         )
         self.connection.commit()
 
@@ -80,6 +82,7 @@ class PredictionStore:
         row = self.connection.execute(
             """
             SELECT percentile5, percentile95
+                , date
             FROM predictions
             WHERE market = ? AND forecaster = ? AND option = ?
             """,
@@ -87,7 +90,13 @@ class PredictionStore:
         ).fetchone()
         if row is None:
             return None
-        return {"percentile5": row[0], "percentile95": row[1]}
+        prediction = {
+            "percentile5": row[0],
+            "percentile95": row[1],
+        }
+        if row[2] is not None:
+            prediction["date"] = row[2]
+        return prediction
 
     def readAllPredictions(self):
         rows = self.connection.execute(
