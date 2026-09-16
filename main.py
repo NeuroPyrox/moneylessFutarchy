@@ -1,5 +1,6 @@
 
 import csv
+from datetime import date as calendarDate
 import math
 import sqlite3
 from io import StringIO
@@ -34,7 +35,15 @@ def _validatePrediction(option, percentile5, percentile95):
 
 def _validateDate(date):
     if not isinstance(date, str) or not date:
-        raise InvalidPrediction("date must be a non-empty string")
+        raise InvalidPrediction("date must use YYYY-MM-DD format")
+    try:
+        parsedDate = calendarDate.fromisoformat(date)
+    except ValueError as error:
+        raise InvalidPrediction(
+            "date must use YYYY-MM-DD format"
+        ) from error
+    if parsedDate.isoformat() != date:
+        raise InvalidPrediction("date must use YYYY-MM-DD format")
 
 
 class PredictionStore:
