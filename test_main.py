@@ -1138,6 +1138,49 @@ class MarketDecisionTests(unittest.TestCase):
             )
             reopenedStore.close()
 
+    def test_decideMarket_keepsPredictionsReadable(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 10, 30)
+
+            store.decideMarket("market-1")
+
+            self.assertEqual(
+                store.readPrediction(
+                    "market-1",
+                    "forecaster-1",
+                    "option-a",
+                ),
+                {
+                    "percentile5": 10,
+                    "percentile95": 30,
+                    "date": "2020-01-15",
+                },
+            )
+            store.close()
+
+    def test_decideMarket_keepsPredictionsInAllPredictionsRead(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 10, 30)
+
+            store.decideMarket("market-1")
+
+            self.assertEqual(
+                store.readAllPredictions(),
+                [
+                    {
+                        "market": "market-1",
+                        "forecaster": "forecaster-1",
+                        "option": "option-a",
+                        "percentile5": 10,
+                        "percentile95": 30,
+                        "date": "2020-01-15",
+                    }
+                ],
+            )
+            store.close()
+
     def test_decideMarket_rejectsDecidingMarketTwice(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
