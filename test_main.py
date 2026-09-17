@@ -796,6 +796,25 @@ class RecommendedDecisionTests(unittest.TestCase):
             self.assertTrue(isclose(sum(probabilities), 1.0))
             store.close()
 
+    def test_readRecommendedDecisions_choosesRecommendedOptionFromProbabilityDistribution(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "option-a", 0, 10)
+            self._submitPrediction(store, "option-b", -1, 9)
+
+            recommendations = [
+                self._readMarketResult(store)["recommendedOption"]
+                for _ in range(100)
+            ]
+
+            optionACount = recommendations.count("option-a")
+            optionBCount = recommendations.count("option-b")
+            self.assertGreater(optionACount, 20)
+            self.assertGreater(optionBCount, 20)
+            self.assertLess(optionACount, 80)
+            self.assertLess(optionBCount, 80)
+            store.close()
+
     def test_readRecommendedDecisions_usesUniformForecasterMixture(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
@@ -830,6 +849,7 @@ class RecommendedDecisionTests(unittest.TestCase):
             result = store.readRecommendedDecisions()
             self.assertEqual(result, [])
             store.close()
+
 
     def test_predictionsFromDifferentMarkets_areKeptSeparate(self):
         with TemporaryDirectory() as directory:
@@ -956,6 +976,66 @@ class RecommendedDecisionTests(unittest.TestCase):
                 {"percentile5": 10, "percentile95": 30, "date": "2020-01-15"},
             )
             secondStore.close()
+
+
+class MarketDecisionTests(unittest.TestCase):
+    def _submitPrediction(self, store, market, option, percentile5,
+                          percentile95):
+        store.submitPrediction(
+            market,
+            "forecaster-1",
+            option,
+            percentile5,
+            percentile95,
+            date="2020-01-15",
+        )
+
+    def test_decideMarket_storesRecommendedOption(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+            recommendedOption = store.readRecommendedDecisions()[0][
+                "recommendedOption"
+            ]
+
+            store.decideMarket("market-1")
+
+            self.assertEqual(
+                store.readDecisions(),
+                [
+                    {
+                        "market": "market-1",
+                        "chosenOption": recommendedOption,
+                    }
+                ],
+            )
+            store.close()
+
+    def test_decideMarket_storesOnlyTheDecisionForTheSpecifiedMarket(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+            self._submitPrediction(store, "market-2", "option-a", 0, 1)
+            self._submitPrediction(store, "market-2", "option-b", 99, 101)
+            recommendedOption = {
+                result["market"]: result["recommendedOption"]
+                for result in store.readRecommendedDecisions()
+            }["market-1"]
+
+            store.decideMarket("market-1")
+
+            self.assertEqual(
+                store.readDecisions(),
+                [
+                    {
+                        "market": "market-1",
+                        "chosenOption": recommendedOption,
+                    }
+                ],
+            )
+            store.close()
 
 
 if __name__ == "__main__":

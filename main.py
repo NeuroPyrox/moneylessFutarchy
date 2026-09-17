@@ -77,6 +77,14 @@ class PredictionStore:
             )
             """
         )
+        self.connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS decisions (
+                market TEXT PRIMARY KEY,
+                chosen_option TEXT NOT NULL
+            )
+            """
+        )
         self.connection.commit()
 
     def submitPrediction(
@@ -242,10 +250,14 @@ class PredictionStore:
                 }
                 for option, count in recommendationCounts.items()
             ]
-            recommendedOption = max(
-                recommendedOptions,
-                key=lambda recommendation: recommendation["probability"],
-            )["option"]
+            randomValue = random.random()
+            cumulativeProbability = 0
+            recommendedOption = recommendedOptions[-1]["option"]
+            for recommendation in recommendedOptions:
+                cumulativeProbability += recommendation["probability"]
+                if randomValue < cumulativeProbability:
+                    recommendedOption = recommendation["option"]
+                    break
             results.append(
                 {
                     "market": market,
@@ -254,6 +266,37 @@ class PredictionStore:
                 }
             )
         return results
+
+    def decideMarket(self, market):
+        recommendation = next(
+            result
+            for result in self.readRecommendedDecisions()
+            if result["market"] == market
+        )
+        self.connection.execute(
+            """
+            INSERT INTO decisions (market, chosen_option)
+            VALUES (?, ?)
+            """,
+            (market, recommendation["recommendedOption"]),
+        )
+        self.connection.commit()
+
+    def readDecisions(self):
+        rows = self.connection.execute(
+            """
+            SELECT market, chosen_option
+            FROM decisions
+            ORDER BY rowid
+            """
+        ).fetchall()
+        return [
+            {
+                "market": market,
+                "chosenOption": chosenOption,
+            }
+            for market, chosenOption in rows
+        ]
 
     def resolveMarket(self, market, outcome):
         self.connection.execute(
