@@ -1007,6 +1007,7 @@ class MarketDecisionTests(unittest.TestCase):
                     {
                         "market": "market-1",
                         "chosenOption": recommendedOption,
+                        "decisionDate": date.today().isoformat(),
                     }
                 ],
             )
@@ -1032,6 +1033,7 @@ class MarketDecisionTests(unittest.TestCase):
                     {
                         "market": "market-1",
                         "chosenOption": recommendedOption,
+                        "decisionDate": date.today().isoformat(),
                     }
                 ],
             )
@@ -1057,6 +1059,7 @@ class MarketDecisionTests(unittest.TestCase):
                     {
                         "market": "market-1",
                         "chosenOption": recommendedOption,
+                        "decisionDate": date.today().isoformat(),
                     }
                 ],
             )
@@ -1083,14 +1086,56 @@ class MarketDecisionTests(unittest.TestCase):
                     {
                         "market": "market-1",
                         "chosenOption": recommendations["market-1"],
+                        "decisionDate": date.today().isoformat(),
                     },
                     {
                         "market": "market-2",
                         "chosenOption": recommendations["market-2"],
+                        "decisionDate": date.today().isoformat(),
                     },
                 ],
             )
             store.close()
+
+    def test_decideMarket_storesChosenOptionAndDecisionDate(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            recommendedOption = store.readRecommendedDecisions()[0][
+                "recommendedOption"
+            ]
+            store.decideMarket("market-1")
+
+            decision = store.readDecisions()[0]
+            self.assertEqual(decision["market"], "market-1")
+            self.assertEqual(decision["chosenOption"], recommendedOption)
+            self.assertEqual(decision["decisionDate"], date.today().isoformat())
+            store.close()
+
+    def test_decideMarket_persistsDecisionDate(self):
+        with TemporaryDirectory() as directory:
+            filename = f"{directory}/predictions.db"
+            store = PredictionStore(filename)
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            store.decideMarket("market-1")
+            store.close()
+
+            reopenedStore = PredictionStore(filename)
+            self.assertEqual(
+                reopenedStore.readDecisions(),
+                [
+                    {
+                        "market": "market-1",
+                        "chosenOption": "option-a",
+                        "decisionDate": date.today().isoformat(),
+                    }
+                ],
+            )
+            reopenedStore.close()
 
 
 if __name__ == "__main__":
