@@ -1253,6 +1253,83 @@ class MarketDecisionTests(unittest.TestCase):
             )
             store.close()
 
+    def test_submitPrediction_afterMarketIsDecided_isRejected(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            store.decideMarket("market-1")
+
+            with self.assertRaises(MarketAlreadyDecided):
+                store.submitPrediction(
+                    "market-1", "forecaster-2", "option-c", 10, 30,
+                    date="2020-01-15",
+                )
+            store.close()
+
+    def test_submitPrediction_updateAfterMarketIsDecided_isRejected(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 10, 30)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            store.decideMarket("market-1")
+
+            with self.assertRaises(MarketAlreadyDecided):
+                store.submitPrediction(
+                    "market-1", "forecaster-1", "option-a", 20, 40,
+                    date="2020-01-15",
+                )
+            store.close()
+
+    def test_submitPrediction_afterMarketIsDecided_doesNotPersistPrediction(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            store.decideMarket("market-1")
+
+            with self.assertRaises(MarketAlreadyDecided):
+                store.submitPrediction(
+                    "market-1", "forecaster-2", "option-c", 10, 30,
+                    date="2020-01-15",
+                )
+
+            self.assertIsNone(
+                store.readPrediction(
+                    "market-1", "forecaster-2", "option-c"
+                )
+            )
+            store.close()
+
+    def test_submitPrediction_updateAfterMarketIsDecided_keepsOriginalPrediction(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 10, 30)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            store.decideMarket("market-1")
+
+            with self.assertRaises(MarketAlreadyDecided):
+                store.submitPrediction(
+                    "market-1", "forecaster-1", "option-a", 20, 40,
+                    date="2020-01-15",
+                )
+
+            self.assertEqual(
+                store.readPrediction(
+                    "market-1", "forecaster-1", "option-a"
+                ),
+                {
+                    "percentile5": 10,
+                    "percentile95": 30,
+                    "date": "2020-01-15",
+                },
+            )
+            store.close()
+
     def test_decideMarket_rejectsDecidingMarketTwice(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
