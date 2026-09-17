@@ -50,6 +50,7 @@ from unittest.mock import patch
 
 from main import (
     InvalidPrediction,
+    MarketAlreadyDecided,
     MarketAlreadyResolved,
     PredictionStore,
 )
@@ -1136,6 +1137,34 @@ class MarketDecisionTests(unittest.TestCase):
                 ],
             )
             reopenedStore.close()
+
+    def test_decideMarket_rejectsDecidingMarketTwice(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            store.decideMarket("market-1")
+
+            with self.assertRaises(MarketAlreadyDecided):
+                store.decideMarket("market-1")
+
+            store.close()
+
+    def test_decideMarket_keepsOriginalDecisionAfterSecondAttempt(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 0, 10)
+            self._submitPrediction(store, "market-1", "option-b", 0, 10)
+
+            store.decideMarket("market-1")
+            originalDecision = store.readDecisions()
+
+            with self.assertRaises(MarketAlreadyDecided):
+                store.decideMarket("market-1")
+
+            self.assertEqual(store.readDecisions(), originalDecision)
+            store.close()
 
 
 if __name__ == "__main__":
