@@ -1037,6 +1037,61 @@ class MarketDecisionTests(unittest.TestCase):
             )
             store.close()
 
+    def test_decideMarket_persistsDecisionWithMarket(self):
+        with TemporaryDirectory() as directory:
+            filename = f"{directory}/predictions.db"
+            store = PredictionStore(filename)
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            recommendedOption = store.readRecommendedDecisions()[0][
+                "recommendedOption"
+            ]
+            store.decideMarket("market-1")
+            store.close()
+
+            reopenedStore = PredictionStore(filename)
+            self.assertEqual(
+                reopenedStore.readDecisions(),
+                [
+                    {
+                        "market": "market-1",
+                        "chosenOption": recommendedOption,
+                    }
+                ],
+            )
+            reopenedStore.close()
+
+    def test_decisionsRemainAssociatedWithTheirMarkets(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+            self._submitPrediction(store, "market-2", "option-a", 0, 1)
+            self._submitPrediction(store, "market-2", "option-b", 99, 101)
+
+            recommendations = {
+                result["market"]: result["recommendedOption"]
+                for result in store.readRecommendedDecisions()
+            }
+            store.decideMarket("market-1")
+            store.decideMarket("market-2")
+
+            self.assertEqual(
+                store.readDecisions(),
+                [
+                    {
+                        "market": "market-1",
+                        "chosenOption": recommendations["market-1"],
+                    },
+                    {
+                        "market": "market-2",
+                        "chosenOption": recommendations["market-2"],
+                    },
+                ],
+            )
+            store.close()
+
 
 if __name__ == "__main__":
     unittest.main()
