@@ -851,6 +851,78 @@ class RecommendedDecisionTests(unittest.TestCase):
             self.assertEqual(result, [])
             store.close()
 
+    def test_readRecommendedDecisions_omitsDecidedMarkets(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            store.submitPrediction(
+                "market-1", "forecaster-1", "option-a", 99, 101,
+                date="2020-01-15",
+            )
+            store.submitPrediction(
+                "market-1", "forecaster-1", "option-b", 0, 1,
+                date="2020-01-15",
+            )
+
+            store.decideMarket("market-1")
+
+            self.assertEqual(store.readRecommendedDecisions(), [])
+            store.close()
+
+    def test_readRecommendedDecisions_keepsActiveMarketsAfterAnotherMarketIsDecided(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            store.submitPrediction(
+                "market-1", "forecaster-1", "option-a", 99, 101,
+                date="2020-01-15",
+            )
+            store.submitPrediction(
+                "market-1", "forecaster-1", "option-b", 0, 1,
+                date="2020-01-15",
+            )
+            store.submitPrediction(
+                "market-2", "forecaster-1", "option-a", 0, 1,
+                date="2020-01-15",
+            )
+            store.submitPrediction(
+                "market-2", "forecaster-1", "option-b", 99, 101,
+                date="2020-01-15",
+            )
+
+            store.decideMarket("market-1")
+
+            self.assertEqual(
+                [result["market"] for result in store.readRecommendedDecisions()],
+                ["market-2"],
+            )
+            store.close()
+
+    def test_readRecommendedDecisions_preservesActiveMarketRecommendation(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            store.submitPrediction(
+                "market-1", "forecaster-1", "option-a", 99, 101,
+                date="2020-01-15",
+            )
+            store.submitPrediction(
+                "market-1", "forecaster-1", "option-b", 0, 1,
+                date="2020-01-15",
+            )
+            store.submitPrediction(
+                "market-2", "forecaster-1", "option-a", 0, 1,
+                date="2020-01-15",
+            )
+            store.submitPrediction(
+                "market-2", "forecaster-1", "option-b", 99, 101,
+                date="2020-01-15",
+            )
+
+            store.decideMarket("market-1")
+
+            recommendation = store.readRecommendedDecisions()[0]
+            self.assertEqual(recommendation["market"], "market-2")
+            self.assertEqual(recommendation["recommendedOption"], "option-b")
+            store.close()
+
 
     def test_predictionsFromDifferentMarkets_areKeptSeparate(self):
         with TemporaryDirectory() as directory:

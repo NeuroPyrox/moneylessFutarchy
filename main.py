@@ -215,6 +215,11 @@ class PredictionStore:
             """
             SELECT market, option, percentile5, percentile95
             FROM predictions
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM decisions
+                WHERE decisions.market = predictions.market
+            )
             ORDER BY market, option, forecaster
             """
         ).fetchall()
