@@ -42,6 +42,7 @@ User stories above here have been implemented, and user stories below here haven
 import unittest
 import subprocess
 import sys
+from math import isclose
 from datetime import date
 from tempfile import TemporaryDirectory
 from pathlib import Path
@@ -357,6 +358,26 @@ class SubmitPredictionTests(unittest.TestCase):
 
 
 class SubmitPredictionRevisionTests(unittest.TestCase):
+    def test_submitPrediction_revisionOverwritesPreviousDate(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            store.submitPrediction(
+                "market-date", "forecaster-1", "option-a", 10, 30,
+                date="2020-01-15",
+            )
+            store.submitPrediction(
+                "market-date", "forecaster-1", "option-a", 20, 40,
+                date="2020-02-15",
+            )
+
+            self.assertEqual(
+                store.readPrediction(
+                    "market-date", "forecaster-1", "option-a"
+                )["date"],
+                "2020-02-15",
+            )
+            store.close()
+
     def test_submitPrediction_revisionReplacesPreviousDate(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
@@ -669,6 +690,145 @@ class PredictionSeparationTests(unittest.TestCase):
                 )["date"],
                 "2020-02-15",
             )
+            store.close()
+
+
+class RecommendedDecisionTests(unittest.TestCase):
+    def _submitPrediction(self, store, option, percentile5, percentile95,
+                          forecaster="forecaster-1"):
+        store.submitPrediction(
+            "market-1",
+            forecaster,
+            option,
+            percentile5,
+            percentile95,
+            date="2020-01-15",
+        )
+
+    def _readMarketResult(self, store):
+        results = store.readRecommendedDecisions()
+        self.assertEqual(len(results), 1)
+        return results[0]
+
+    def test_readRecommendedDecisions_recommendsClearlyHighestOption(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "option-a", 99, 101)
+            self._submitPrediction(store, "option-b", 0, 1)
+
+            result = self._readMarketResult(store)
+
+            self.assertEqual(result["market"], "market-1")
+            self.assertEqual(result["recommendedOption"], "option-a")
+            self.assertGreaterEqual(
+                dict(
+                    (item["option"], item["probability"])
+                    for item in result["recommendedOptions"]
+                )["option-a"],
+                0.99,
+            )
+            store.close()
+
+    def test_readRecommendedDecisions_clearlyLowestOptionRarelyWins(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "option-a", 0, 1)
+            self._submitPrediction(store, "option-b", 99, 101)
+
+            result = self._readMarketResult(store)
+
+            self.assertLessEqual(
+                dict(
+                    (item["option"], item["probability"])
+                    for item in result["recommendedOptions"]
+                )["option-a"],
+                0.01,
+            )
+            store.close()
+
+    def test_readRecommendedDecisions_equalOptionsHaveSimilarChance(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "option-a", 0, 10)
+            self._submitPrediction(store, "option-b", 0, 10)
+
+            result = self._readMarketResult(store)
+            probabilities = {
+                item["option"]: item["probability"]
+                for item in result["recommendedOptions"]
+            }
+
+            self.assertGreaterEqual(probabilities["option-a"], 0.35)
+            self.assertLessEqual(probabilities["option-a"], 0.65)
+            self.assertGreaterEqual(probabilities["option-b"], 0.35)
+            self.assertLessEqual(probabilities["option-b"], 0.65)
+            store.close()
+
+    def test_readRecommendedDecisions_closeOptionsHaveSimilarChance(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "option-a", 0, 10)
+            self._submitPrediction(store, "option-b", 0, 10.1)
+
+            result = self._readMarketResult(store)
+            probabilities = {
+                item["option"]: item["probability"]
+                for item in result["recommendedOptions"]
+            }
+
+            self.assertLess(abs(
+                probabilities["option-a"] - probabilities["option-b"]
+            ), 0.15)
+            store.close()
+
+    def test_readRecommendedDecisions_returnsNormalizedProbabilities(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "option-a", 0, 10)
+            self._submitPrediction(store, "option-b", 0, 10)
+
+            result = self._readMarketResult(store)
+            probabilities = [
+                item["probability"] for item in result["recommendedOptions"]
+            ]
+
+            self.assertTrue(all(0 <= probability <= 1 for probability in probabilities))
+            self.assertTrue(isclose(sum(probabilities), 1.0))
+            store.close()
+
+    def test_readRecommendedDecisions_usesUniformForecasterMixture(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(
+                store, "option-a", 99, 101, forecaster="forecaster-a"
+            )
+            self._submitPrediction(
+                store, "option-b", 99, 101, forecaster="forecaster-b"
+            )
+            self._submitPrediction(
+                store, "option-a", 0, 1, forecaster="forecaster-b"
+            )
+            self._submitPrediction(
+                store, "option-b", 0, 1, forecaster="forecaster-a"
+            )
+
+            result = self._readMarketResult(store)
+            probabilities = {
+                item["option"]: item["probability"]
+                for item in result["recommendedOptions"]
+            }
+
+            self.assertGreaterEqual(probabilities["option-a"], 0.35)
+            self.assertLessEqual(probabilities["option-a"], 0.65)
+            self.assertGreaterEqual(probabilities["option-b"], 0.35)
+            self.assertLessEqual(probabilities["option-b"], 0.65)
+            store.close()
+
+    def test_readRecommendedDecisions_omitsMarketsWithoutPredictions(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            result = store.readRecommendedDecisions()
+            self.assertEqual(result, [])
             store.close()
 
     def test_predictionsFromDifferentMarkets_areKeptSeparate(self):

@@ -2,6 +2,7 @@
 import csv
 from datetime import date as calendarDate
 import math
+import random
 import sqlite3
 from io import StringIO
 
@@ -195,6 +196,64 @@ class PredictionStore:
                 prediction["date"] = row[5]
             predictions.append(prediction)
         return predictions
+
+    def readRecommendedDecisions(self):
+        rows = self.connection.execute(
+            """
+            SELECT market, option, percentile5, percentile95
+            FROM predictions
+            ORDER BY market, option, forecaster
+            """
+        ).fetchall()
+        predictionsByMarket = {}
+        for market, option, percentile5, percentile95 in rows:
+            predictionsByMarket.setdefault(market, {}).setdefault(
+                option, []
+            ).append((percentile5, percentile95))
+
+        results = []
+        for market, predictionsByOption in predictionsByMarket.items():
+            recommendationCounts = {
+                option: 0 for option in predictionsByOption
+            }
+            for _ in range(100):
+                sampledScores = {}
+                for option, predictions in predictionsByOption.items():
+                    percentile5, percentile95 = random.choice(predictions)
+                    mean = (percentile5 + percentile95) / 2
+                    standardDeviation = (
+                        mean - percentile5
+                    ) / 1.64485
+                    sampledScores[option] = random.gauss(
+                        mean, standardDeviation
+                    )
+                highestScore = max(sampledScores.values())
+                highestOptions = [
+                    option
+                    for option, score in sampledScores.items()
+                    if score == highestScore
+                ]
+                recommendationCounts[random.choice(highestOptions)] += 1
+
+            recommendedOptions = [
+                {
+                    "option": option,
+                    "probability": count / 100,
+                }
+                for option, count in recommendationCounts.items()
+            ]
+            recommendedOption = max(
+                recommendedOptions,
+                key=lambda recommendation: recommendation["probability"],
+            )["option"]
+            results.append(
+                {
+                    "market": market,
+                    "recommendedOption": recommendedOption,
+                    "recommendedOptions": recommendedOptions,
+                }
+            )
+        return results
 
     def resolveMarket(self, market, outcome):
         self.connection.execute(
