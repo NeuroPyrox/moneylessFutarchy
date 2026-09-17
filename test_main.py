@@ -1358,6 +1358,23 @@ class MarketDecisionTests(unittest.TestCase):
             self.assertEqual(store.readDecisions(), originalDecision)
             store.close()
 
+    def test_decideMarket_canDecideActiveMarketAfterAnotherMarketIsDecided(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+            self._submitPrediction(store, "market-2", "option-a", 0, 1)
+            self._submitPrediction(store, "market-2", "option-b", 99, 101)
+
+            store.decideMarket("market-1")
+            store.decideMarket("market-2")
+
+            self.assertEqual(
+                [decision["market"] for decision in store.readDecisions()],
+                ["market-1", "market-2"],
+            )
+            store.close()
+
 
 if __name__ == "__main__":
     unittest.main()
