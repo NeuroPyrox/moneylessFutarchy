@@ -95,6 +95,12 @@ class PredictionStore:
     def submitPrediction(
         self, market, forecaster, option, percentile5, percentile95, date=None
     ):
+        if self.connection.execute(
+            "SELECT 1 FROM decisions WHERE market = ?", (market,)
+        ).fetchone() is not None:
+            raise MarketAlreadyDecided(
+                f"market {market!r} is already decided"
+            )
         if self._isMarketResolved(market):
             raise MarketAlreadyResolved(
                 f"market {market!r} is already resolved"
