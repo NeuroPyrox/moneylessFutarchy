@@ -81,7 +81,8 @@ class PredictionStore:
             """
             CREATE TABLE IF NOT EXISTS decisions (
                 market TEXT PRIMARY KEY,
-                chosen_option TEXT NOT NULL
+                chosen_option TEXT NOT NULL,
+                decision_date TEXT NOT NULL
             )
             """
         )
@@ -275,17 +276,21 @@ class PredictionStore:
         )
         self.connection.execute(
             """
-            INSERT INTO decisions (market, chosen_option)
-            VALUES (?, ?)
+            INSERT INTO decisions (market, chosen_option, decision_date)
+            VALUES (?, ?, ?)
             """,
-            (market, recommendation["recommendedOption"]),
+            (
+                market,
+                recommendation["recommendedOption"],
+                _today().isoformat(),
+            ),
         )
         self.connection.commit()
 
     def readDecisions(self):
         rows = self.connection.execute(
             """
-            SELECT market, chosen_option
+            SELECT market, chosen_option, decision_date
             FROM decisions
             ORDER BY rowid
             """
@@ -294,8 +299,9 @@ class PredictionStore:
             {
                 "market": market,
                 "chosenOption": chosenOption,
+                "decisionDate": decisionDate,
             }
-            for market, chosenOption in rows
+            for market, chosenOption, decisionDate in rows
         ]
 
     def resolveMarket(self, market, outcome):
