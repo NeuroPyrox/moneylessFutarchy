@@ -15,6 +15,10 @@ class MarketAlreadyResolved(ValueError):
     """Raised when a prediction is changed after its market is resolved."""
 
 
+class MarketAlreadyDecided(ValueError):
+    """Raised when a market is decided more than once."""
+
+
 def _validatePrediction(option, percentile5, percentile95):
     if not isinstance(option, str) or not option:
         raise InvalidPrediction("option must be a non-empty string")
@@ -269,6 +273,12 @@ class PredictionStore:
         return results
 
     def decideMarket(self, market):
+        if self.connection.execute(
+            "SELECT 1 FROM decisions WHERE market = ?", (market,)
+        ).fetchone() is not None:
+            raise MarketAlreadyDecided(
+                f"market {market!r} is already decided"
+            )
         recommendation = next(
             result
             for result in self.readRecommendedDecisions()
