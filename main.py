@@ -242,10 +242,14 @@ class PredictionStore:
                 }
                 for option, count in recommendationCounts.items()
             ]
-            recommendedOption = max(
-                recommendedOptions,
-                key=lambda recommendation: recommendation["probability"],
-            )["option"]
+            randomValue = random.random()
+            cumulativeProbability = 0
+            recommendedOption = recommendedOptions[-1]["option"]
+            for recommendation in recommendedOptions:
+                cumulativeProbability += recommendation["probability"]
+                if randomValue < cumulativeProbability:
+                    recommendedOption = recommendation["option"]
+                    break
             results.append(
                 {
                     "market": market,

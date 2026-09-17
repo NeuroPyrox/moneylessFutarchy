@@ -796,6 +796,25 @@ class RecommendedDecisionTests(unittest.TestCase):
             self.assertTrue(isclose(sum(probabilities), 1.0))
             store.close()
 
+    def test_readRecommendedDecisions_choosesRecommendedOptionFromProbabilityDistribution(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "option-a", 0, 10)
+            self._submitPrediction(store, "option-b", -1, 9)
+
+            recommendations = [
+                self._readMarketResult(store)["recommendedOption"]
+                for _ in range(100)
+            ]
+
+            optionACount = recommendations.count("option-a")
+            optionBCount = recommendations.count("option-b")
+            self.assertGreater(optionACount, 20)
+            self.assertGreater(optionBCount, 20)
+            self.assertLess(optionACount, 80)
+            self.assertLess(optionBCount, 80)
+            store.close()
+
     def test_readRecommendedDecisions_usesUniformForecasterMixture(self):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
