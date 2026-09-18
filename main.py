@@ -311,19 +311,50 @@ class PredictionStore:
     def readDecisions(self):
         rows = self.connection.execute(
             """
-            SELECT market, chosen_option, decision_date
-            FROM decisions
-            ORDER BY rowid
+            SELECT
+                d.market,
+                d.chosen_option,
+                d.decision_date,
+                p.date,
+                p.forecaster,
+                p.percentile5,
+                p.percentile95
+            FROM decisions AS d
+            LEFT JOIN predictions AS p
+                ON p.market = d.market
+                AND p.option = d.chosen_option
+            ORDER BY d.rowid, p.forecaster
             """
         ).fetchall()
-        return [
-            {
-                "market": market,
-                "chosenOption": chosenOption,
-                "decisionDate": decisionDate,
-            }
-            for market, chosenOption, decisionDate in rows
-        ]
+        decisions = []
+        for (
+            market,
+            chosenOption,
+            decisionDate,
+            predictionDate,
+            forecaster,
+            percentile5,
+            percentile95,
+        ) in rows:
+            if not decisions or decisions[-1]["market"] != market:
+                decisions.append(
+                    {
+                        "market": market,
+                        "chosenOption": chosenOption,
+                        "decisionDate": decisionDate,
+                        "predictions": [],
+                    }
+                )
+            if forecaster is not None:
+                decisions[-1]["predictions"].append(
+                    {
+                        "date": predictionDate,
+                        "forecaster": forecaster,
+                        "percentile5": percentile5,
+                        "percentile95": percentile95,
+                    }
+                )
+        return decisions
 
     def resolveMarket(self, market, outcome):
         self.connection.execute(
