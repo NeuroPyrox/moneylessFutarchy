@@ -1583,6 +1583,58 @@ class MarketDecisionTests(unittest.TestCase):
             )
             store.close()
 
+    def test_resolveMarket_acceptsDecidedMarket(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            store.decideMarket("market-1")
+            store.resolveMarket("market-1", 42)
+
+            self.assertEqual(store.readMarketOutcome("market-1"), "42")
+            store.close()
+
+    def test_resolveMarket_keepsDecisionAndPredictionsReadable(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            store.decideMarket("market-1")
+            store.resolveMarket("market-1", 42)
+
+            self.assertEqual(store.readDecisions()[0]["market"], "market-1")
+            self.assertEqual(
+                store.readPrediction(
+                    "market-1", "forecaster-1", "option-a"
+                ),
+                {
+                    "percentile5": 99,
+                    "percentile95": 101,
+                    "date": "2020-01-15",
+                },
+            )
+            store.close()
+
+    def test_resolveMarket_canResolveDecidedMarketAfterReopening(self):
+        with TemporaryDirectory() as directory:
+            filename = f"{directory}/predictions.db"
+            store = PredictionStore(filename)
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            store.decideMarket("market-1")
+            store.close()
+
+            reopenedStore = PredictionStore(filename)
+            reopenedStore.resolveMarket("market-1", 42)
+
+            self.assertEqual(
+                reopenedStore.readMarketOutcome("market-1"), "42"
+            )
+            reopenedStore.close()
+
 
 if __name__ == "__main__":
     unittest.main()
