@@ -1081,6 +1081,14 @@ class MarketDecisionTests(unittest.TestCase):
                         "market": "market-1",
                         "chosenOption": recommendedOption,
                         "decisionDate": date.today().isoformat(),
+                        "predictions": [
+                            {
+                                "date": "2020-01-15",
+                                "forecaster": "forecaster-1",
+                                "percentile5": 99,
+                                "percentile95": 101,
+                            }
+                        ],
                     }
                 ],
             )
@@ -1107,6 +1115,14 @@ class MarketDecisionTests(unittest.TestCase):
                         "market": "market-1",
                         "chosenOption": recommendedOption,
                         "decisionDate": date.today().isoformat(),
+                        "predictions": [
+                            {
+                                "date": "2020-01-15",
+                                "forecaster": "forecaster-1",
+                                "percentile5": 99,
+                                "percentile95": 101,
+                            }
+                        ],
                     }
                 ],
             )
@@ -1133,6 +1149,14 @@ class MarketDecisionTests(unittest.TestCase):
                         "market": "market-1",
                         "chosenOption": recommendedOption,
                         "decisionDate": date.today().isoformat(),
+                        "predictions": [
+                            {
+                                "date": "2020-01-15",
+                                "forecaster": "forecaster-1",
+                                "percentile5": 99,
+                                "percentile95": 101,
+                            }
+                        ],
                     }
                 ],
             )
@@ -1160,11 +1184,27 @@ class MarketDecisionTests(unittest.TestCase):
                         "market": "market-1",
                         "chosenOption": recommendations["market-1"],
                         "decisionDate": date.today().isoformat(),
+                        "predictions": [
+                            {
+                                "date": "2020-01-15",
+                                "forecaster": "forecaster-1",
+                                "percentile5": 99,
+                                "percentile95": 101,
+                            }
+                        ],
                     },
                     {
                         "market": "market-2",
                         "chosenOption": recommendations["market-2"],
                         "decisionDate": date.today().isoformat(),
+                        "predictions": [
+                            {
+                                "date": "2020-01-15",
+                                "forecaster": "forecaster-1",
+                                "percentile5": 99,
+                                "percentile95": 101,
+                            }
+                        ],
                     },
                 ],
             )
@@ -1205,6 +1245,14 @@ class MarketDecisionTests(unittest.TestCase):
                         "market": "market-1",
                         "chosenOption": "option-a",
                         "decisionDate": date.today().isoformat(),
+                        "predictions": [
+                            {
+                                "date": "2020-01-15",
+                                "forecaster": "forecaster-1",
+                                "percentile5": 99,
+                                "percentile95": 101,
+                            }
+                        ],
                     }
                 ],
             )
@@ -1356,6 +1404,119 @@ class MarketDecisionTests(unittest.TestCase):
                 store.decideMarket("market-1")
 
             self.assertEqual(store.readDecisions(), originalDecision)
+            store.close()
+
+    def test_readDecisions_includesPredictionsForChosenOption(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            store.decideMarket("market-1")
+
+            decision = store.readDecisions()[0]
+            self.assertEqual(decision["market"], "market-1")
+            self.assertEqual(decision["chosenOption"], "option-a")
+            self.assertEqual(
+                decision["predictions"],
+                [
+                    {
+                        "date": "2020-01-15",
+                        "forecaster": "forecaster-1",
+                        "percentile5": 99,
+                        "percentile95": 101,
+                    }
+                ],
+            )
+            store.close()
+
+    def test_readDecisions_includesAllForecastersForChosenOption(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            store.submitPrediction(
+                "market-1", "forecaster-2", "option-a", 90, 100,
+                date="2020-01-16",
+            )
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            store.decideMarket("market-1")
+
+            self.assertEqual(
+                store.readDecisions()[0]["predictions"],
+                [
+                    {
+                        "date": "2020-01-15",
+                        "forecaster": "forecaster-1",
+                        "percentile5": 99,
+                        "percentile95": 101,
+                    },
+                    {
+                        "date": "2020-01-16",
+                        "forecaster": "forecaster-2",
+                        "percentile5": 90,
+                        "percentile95": 100,
+                    },
+                ],
+            )
+            store.close()
+
+    def test_readDecisions_excludesPredictionsForOtherOptions(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            store.decideMarket("market-1")
+
+            self.assertEqual(
+                store.readDecisions()[0]["predictions"],
+                [
+                    {
+                        "date": "2020-01-15",
+                        "forecaster": "forecaster-1",
+                        "percentile5": 99,
+                        "percentile95": 101,
+                    }
+                ],
+            )
+            store.close()
+
+    def test_readDecisions_keepsPredictionsSeparatedByMarket(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+            self._submitPrediction(store, "market-2", "option-a", 0, 1)
+            self._submitPrediction(store, "market-2", "option-b", 199, 201)
+
+            store.decideMarket("market-1")
+            store.decideMarket("market-2")
+
+            self.assertEqual(
+                [
+                    decision["predictions"]
+                    for decision in store.readDecisions()
+                ],
+                [
+                    [
+                        {
+                            "date": "2020-01-15",
+                            "forecaster": "forecaster-1",
+                            "percentile5": 99,
+                            "percentile95": 101,
+                        }
+                    ],
+                    [
+                        {
+                            "date": "2020-01-15",
+                            "forecaster": "forecaster-1",
+                            "percentile5": 199,
+                            "percentile95": 201,
+                        }
+                    ],
+                ],
+            )
             store.close()
 
     def test_decideMarket_canDecideActiveMarketAfterAnotherMarketIsDecided(self):
