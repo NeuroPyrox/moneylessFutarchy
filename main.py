@@ -19,6 +19,10 @@ class MarketAlreadyDecided(ValueError):
     """Raised when a market is decided more than once."""
 
 
+class MarketNotDecided(ValueError):
+    """Raised when a market is resolved before it is decided."""
+
+
 def _validatePrediction(option, percentile5, percentile95):
     if not isinstance(option, str) or not option:
         raise InvalidPrediction("option must be a non-empty string")
@@ -95,15 +99,15 @@ class PredictionStore:
     def submitPrediction(
         self, market, forecaster, option, percentile5, percentile95, date=None
     ):
+        if self._isMarketResolved(market):
+            raise MarketAlreadyResolved(
+                f"market {market!r} is already resolved"
+            )
         if self.connection.execute(
             "SELECT 1 FROM decisions WHERE market = ?", (market,)
         ).fetchone() is not None:
             raise MarketAlreadyDecided(
                 f"market {market!r} is already decided"
-            )
-        if self._isMarketResolved(market):
-            raise MarketAlreadyResolved(
-                f"market {market!r} is already resolved"
             )
         _validatePrediction(option, percentile5, percentile95)
         _validateDate(date)
@@ -357,6 +361,12 @@ class PredictionStore:
         return decisions
 
     def resolveMarket(self, market, outcome):
+        if self.connection.execute(
+            "SELECT 1 FROM decisions WHERE market = ?", (market,)
+        ).fetchone() is None:
+            raise MarketNotDecided(
+                f"market {market!r} is not decided"
+            )
         self.connection.execute(
             """
             INSERT INTO markets(market, outcome)

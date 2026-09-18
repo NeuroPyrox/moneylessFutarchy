@@ -51,6 +51,7 @@ from unittest.mock import patch
 from main import (
     InvalidPrediction,
     MarketAlreadyDecided,
+    MarketNotDecided,
     MarketAlreadyResolved,
     PredictionStore,
 )
@@ -485,6 +486,7 @@ class SubmitPredictionRevisionTests(unittest.TestCase):
         with TemporaryDirectory() as directory:
             store = PredictionStore(f"{directory}/predictions.db")
             store.submitPrediction("market-resolved", "forecaster-1", "option-a", 10, 30, date="2020-01-15")
+            store.decideMarket("market-resolved")
             store.resolveMarket("market-resolved", 20)
             with self.assertRaises(MarketAlreadyResolved):
                 store.submitPrediction("market-resolved", "forecaster-1", "option-a", 20, 40, date="2020-01-15")
@@ -1634,6 +1636,27 @@ class MarketDecisionTests(unittest.TestCase):
                 reopenedStore.readMarketOutcome("market-1"), "42"
             )
             reopenedStore.close()
+
+    def test_resolveMarket_beforeDecision_isRejected(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+
+            with self.assertRaises(MarketNotDecided):
+                store.resolveMarket("market-1", 42)
+
+            store.close()
+
+    def test_resolveMarket_beforeDecision_doesNotPersistOutcome(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+
+            with self.assertRaises(MarketNotDecided):
+                store.resolveMarket("market-1", 42)
+
+            self.assertIsNone(store.readMarketOutcome("market-1"))
+            store.close()
 
 
 if __name__ == "__main__":
