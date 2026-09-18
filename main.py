@@ -366,6 +366,12 @@ class PredictionStore:
         )
         self.connection.commit()
 
+    def readMarketOutcome(self, market):
+        row = self.connection.execute(
+            "SELECT outcome FROM markets WHERE market = ?", (market,)
+        ).fetchone()
+        return None if row is None else row[0]
+
     def _isMarketResolved(self, market):
         return self.connection.execute(
             "SELECT 1 FROM markets WHERE market = ?", (market,)
