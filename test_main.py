@@ -1536,6 +1536,53 @@ class MarketDecisionTests(unittest.TestCase):
             )
             store.close()
 
+    def test_readRecommendedDecisions_excludesDecidedMarkets(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            store.decideMarket("market-1")
+
+            self.assertEqual(store.readRecommendedDecisions(), [])
+            store.close()
+
+    def test_readDecisions_includesDecidedMarkets(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+
+            store.decideMarket("market-1")
+
+            decisions = store.readDecisions()
+            self.assertEqual(len(decisions), 1)
+            self.assertEqual(decisions[0]["market"], "market-1")
+            store.close()
+
+    def test_readDecisionsAndReadRecommendedDecisions_areSeparate(self):
+        with TemporaryDirectory() as directory:
+            store = PredictionStore(f"{directory}/predictions.db")
+            self._submitPrediction(store, "market-1", "option-a", 99, 101)
+            self._submitPrediction(store, "market-1", "option-b", 0, 1)
+            self._submitPrediction(store, "market-2", "option-a", 0, 1)
+            self._submitPrediction(store, "market-2", "option-b", 99, 101)
+
+            store.decideMarket("market-1")
+
+            self.assertEqual(
+                [decision["market"] for decision in store.readDecisions()],
+                ["market-1"],
+            )
+            self.assertEqual(
+                [
+                    result["market"]
+                    for result in store.readRecommendedDecisions()
+                ],
+                ["market-2"],
+            )
+            store.close()
+
 
 if __name__ == "__main__":
     unittest.main()
